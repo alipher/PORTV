@@ -38,14 +38,20 @@
             padding: 20px;
             border-radius: 10px;
             margin: 20px 0;
-            font-size: 20px;
-            font-family: monospace;
-            word-break: break-all;
             display: none;
         }
 
         .code-display.show {
             display: block;
+        }
+
+        .short-code {
+            font-size: 48px;
+            font-family: monospace;
+            color: #4CAF50;
+            margin: 15px 0;
+            letter-spacing: 8px;
+            font-weight: bold;
         }
 
         button {
@@ -80,6 +86,14 @@
         .error.show {
             display: block;
         }
+
+        .loading {
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
     </style>
 </head>
 
@@ -88,16 +102,20 @@
         <h1>🖼️ NobleFrame Google Photos</h1>
 
         <div class="instructions">
-            <p>Esta página te ayudará a obtener el código de autorización para tu NobleFrame.</p>
+            <p>Esta página te ayudará a obtener un código corto para tu NobleFrame.</p>
         </div>
 
         <button id="authorize">🔓 Autorizar Google Photos</button>
 
+        <div class="loading" id="loading">
+            <p>⏳ Generando código...</p>
+        </div>
+
         <div class="code-display" id="codeDisplay">
-            <div>✅ ¡Código obtenido!</div>
-            <div style="margin: 15px 0; font-size: 24px; color: #4CAF50;" id="codeValue"></div>
-            <div style="font-size: 14px;">Escribe este código en tu TV</div>
-            <button id="copyBtn">📋 Copiar Código</button>
+            <div>✅ ¡Código generado!</div>
+            <div class="short-code" id="shortCode"></div>
+            <div style="font-size: 14px; margin-top: 10px;">Escribe este código en tu TV</div>
+            <div style="font-size: 12px; color: #ccc; margin-top: 10px;">El código expira en 10 minutos</div>
         </div>
 
         <div class="error" id="error">
@@ -105,7 +123,23 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <script>
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDY-MHc_ghq4E-qpij1v4Sq_YSZx6CY2eM",
+            authDomain: "nobleframe-oauth.firebaseapp.com",
+            databaseURL: "https://nobleframe-oauth-default-rtdb.firebaseio.com",
+            projectId: "nobleframe-oauth"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
         const CLIENT_ID = '982531807682-jf7nkadlmrokc0lvhgbhl4raq59s22fv.apps.googleusercontent.com';
         const REDIRECT_URI = 'https://alipher.github.io/PORTV/oauth_helper.html';
         const SCOPE = 'https://www.googleapis.com/auth/photoslibrary.readonly';
@@ -115,10 +149,8 @@
         const authCode = urlParams.get('code');
 
         if (authCode) {
-            // Mostrar el código
-            document.getElementById('codeValue').textContent = authCode;
-            document.getElementById('codeDisplay').classList.add('show');
-            document.getElementById('authorize').style.display = 'none';
+            // Generar código corto
+            generateShortCode(authCode);
         }
 
         // Botón de autorizar
@@ -134,13 +166,35 @@
             window.location.href = authUrl;
         });
 
-        // Copiar código
-        document.getElementById('copyBtn').addEventListener('click', () => {
-            const code = document.getElementById('codeValue').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                alert('✅ Código copiado al portapapeles');
+        function generateShortCode(longCode) {
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('authorize').style.display = 'none';
+
+            // Generar código corto de 4 dígitos
+            const shortCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+            // Guardar en Firebase
+            const codeRef = database.ref('codes/' + shortCode);
+            codeRef.set({
+                code: longCode,
+                timestamp: Date.now(),
+                expires: Date.now() + (10 * 60 * 1000) // 10 minutos
+            }).then(() => {
+                document.getElementById('loading').classList.remove('show');
+                document.getElementById('shortCode').textContent = shortCode;
+                document.getElementById('codeDisplay').classList.add('show');
+
+                // Auto-limpiar después de 10 minutos
+                setTimeout(() => {
+                    codeRef.remove();
+                }, 10 * 60 * 1000);
+            }).catch((error) => {
+                document.getElementById('loading').classList.remove('show');
+                document.getElementById('errorMessage').textContent =
+                    'Error al generar código: ' + error.message;
+                document.getElementById('error').classList.add('show');
             });
-        });
+        }
 
         // Manejar errores
         const error = urlParams.get('error');
